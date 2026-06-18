@@ -116,9 +116,6 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
   const renderText = (content: string) => {
     if (!isMounted) return null;
 
-    if (isIndex && content.length < 50) {
-        return <span className="font-bold">{content}</span>;
-    }
 
     const tokens = content.split(/([a-zA-Z]+)/);
     return tokens.map((token, index) => {
