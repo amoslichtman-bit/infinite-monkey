@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import Link from 'next/link';
 
 type PlayableItem = {
@@ -12,7 +12,6 @@ const TOTAL_SHAKESPEARE_WORDS = 31534;
 const normalize = (word: string) => word.toLowerCase().replace(/[^a-z]/g, '');
 
 // 1. ISOLATED INPUT COMPONENT
-// Typing letters here will no longer force the massive play text to re-render.
 function GameInput({ 
   uniqueWordsInText, 
   guessedWords, 
@@ -63,9 +62,69 @@ function GameInput({
   );
 }
 
-// 2. MAIN COMPONENT
+// 2. HYPER-OPTIMIZED PARAGRAPH COMPONENT
+const MemoizedParagraph = memo(({ 
+  item, 
+  guessedWords, 
+  lastGuessedWord 
+}: { 
+  item: PlayableItem; 
+  guessedWords: Set<string>; 
+  lastGuessedWord: string | null; 
+}) => {
+  const renderText = (content: string) => {
+    const tokens = content.split(/([a-zA-Z]+)/);
+    return tokens.map((token, index) => {
+      if (index % 2 === 0) {
+        return <span key={index} className="whitespace-pre-wrap">{token}</span>;
+      }
+
+      const isGuessed = guessedWords.has(normalize(token));
+      if (isGuessed) {
+        return <span key={index} className="text-slate-900 font-bold">{token}</span>;
+      }
+
+      return (
+        <span 
+          key={index} 
+          className="missing-word inline-block mx-[2px] align-middle translate-y-[-2px] border-b-2 border-slate-300 rounded-sm"
+          style={{
+            width: `${token.length * 11 - 1}px`,
+            height: '18px',
+            background: 'repeating-linear-gradient(to right, #e2e8f0, #e2e8f0 10px, transparent 10px, transparent 11px)'
+          }}
+        ></span>
+      );
+    });
+  };
+
+  return (
+    // contentVisibility: 'auto' forces Chrome/Safari to skip rendering this if it's off-screen
+    <div style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 30px' }}>
+      {renderText(item.text)}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // If loading a bulk save file, force everything to update
+  const sizeDiff = Math.abs(nextProps.guessedWords.size - prevProps.guessedWords.size);
+  if (sizeDiff !== 1) return false;
+
+  // The Magic Check: If the word they just typed doesn't even exist in this specific 
+  // paragraph's text, tell React to completely skip checking it.
+  if (nextProps.lastGuessedWord) {
+    if (!nextProps.item.text.toLowerCase().includes(nextProps.lastGuessedWord)) {
+      return true; // Return TRUE means "Props are effectively equal, SKIP RENDER"
+    }
+  }
+
+  return false;
+});
+
+
+// 3. MAIN COMPONENT
 export default function PlayableText({ title, items, isIndex = false }: { title: string, items: PlayableItem[], isIndex?: boolean }) {
   const [guessedWords, setGuessedWords] = useState<Set<string>>(new Set());
+  const [lastGuessedWord, setLastGuessedWord] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -88,7 +147,6 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
     }
   }, [guessedWords, isMounted]);
 
-  // Tokenize words efficiently via memoization
   const uniqueWordsInText = useMemo(() => {
     const allText = items.map(i => i.text).join(' ');
     const words = allText.split(/[^a-zA-Z]+/).filter(Boolean).map(w => w.toLowerCase());
@@ -106,6 +164,7 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
   const globalPercent = Math.floor((guessedWords.size / TOTAL_SHAKESPEARE_WORDS) * 100);
 
   const handleCorrectGuess = (word: string) => {
+    setLastGuessedWord(word);
     setGuessedWords(prev => {
       const next = new Set(prev);
       next.add(word);
@@ -113,30 +172,18 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
     });
   };
 
-  const renderText = (content: string) => {
+  // Dedicated lightweight renderer specifically for the Index page links
+  const renderIndexLinks = (content: string) => {
     if (!isMounted) return null;
-
-
     const tokens = content.split(/([a-zA-Z]+)/);
     return tokens.map((token, index) => {
-      if (index % 2 === 0) {
-        return <span key={index} className="whitespace-pre-wrap">{token}</span>;
-      }
-
-      const isGuessed = guessedWords.has(normalize(token));
-      if (isGuessed) {
-        return <span key={index} className="text-slate-900 font-bold">{token}</span>;
-      }
-
+      if (index % 2 === 0) return <span key={index} className="whitespace-pre-wrap">{token}</span>;
+      if (guessedWords.has(normalize(token))) return <span key={index} className="text-slate-900 font-bold">{token}</span>;
       return (
         <span 
           key={index} 
           className="missing-word inline-block mx-[2px] align-middle translate-y-[-2px] border-b-2 border-slate-300 rounded-sm"
-          style={{
-            width: `${token.length * 11 - 1}px`,
-            height: '18px',
-            background: 'repeating-linear-gradient(to right, #e2e8f0, #e2e8f0 10px, transparent 10px, transparent 11px)'
-          }}
+          style={{ width: `${token.length * 11 - 1}px`, height: '18px', background: 'repeating-linear-gradient(to right, #e2e8f0, #e2e8f0 10px, transparent 10px, transparent 11px)' }}
         ></span>
       );
     });
@@ -179,8 +226,8 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
 
       <div className={`${isIndex ? 'text-xl leading-loose' : 'text-base leading-relaxed'} font-serif text-slate-800 break-words ${isIndex ? 'flex flex-col gap-3' : ''}`}>
         {items.map((item, i) => {
-          const content = renderText(item.text);
           
+          // Render Interactive Index Links
           if (item.id) {
             const unlocked = isMounted && isItemFullyGuessed(item.text);
 
@@ -192,7 +239,7 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
                   className="block p-4 border border-blue-300 bg-blue-50 rounded-xl hover:border-blue-400 hover:shadow-md transition-all group cursor-pointer"
                 >
                   <div className="group-hover:scale-[1.01] transition-transform origin-left flex justify-between items-center">
-                    <div>{content}</div>
+                    <div>{renderIndexLinks(item.text)}</div>
                     <span className="ml-4 text-sm text-blue-600 font-sans font-bold whitespace-nowrap">Play →</span>
                   </div>
                 </Link>
@@ -204,18 +251,25 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
                 key={i} 
                 className="block p-4 border border-slate-200 bg-white/50 rounded-xl transition-all cursor-not-allowed opacity-80 flex justify-between items-center"
               >
-                <div>{content}</div>
+                <div>{renderIndexLinks(item.text)}</div>
                 <span className="ml-4 text-sm text-slate-400 font-sans font-bold whitespace-nowrap">Locked</span>
               </div>
             );
           }
 
+          // Render Normal Play Text (Hyper-Optimized)
           return (
             <div 
               key={i} 
               className={isIndex && !item.id ? "text-3xl font-black text-center mt-4 mb-8" : ""}
             >
-              {content}
+              {isMounted && (
+                <MemoizedParagraph 
+                  item={item} 
+                  guessedWords={guessedWords} 
+                  lastGuessedWord={lastGuessedWord} 
+                />
+              )}
             </div>
           );
         })}
