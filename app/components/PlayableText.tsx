@@ -56,7 +56,8 @@ function GameInput({
       onChange={handleChange}
       onKeyDown={handleKeyDown}
       placeholder="Type a word..."
-      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 font-mono text-sm shadow-inner"
+      // text-base on mobile prevents iOS from automatically zooming the screen
+      className="w-full px-3 py-2 sm:px-4 sm:py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 font-mono text-base sm:text-sm shadow-inner"
       autoFocus
     />
   );
@@ -99,21 +100,17 @@ const MemoizedParagraph = memo(({
   };
 
   return (
-    // contentVisibility: 'auto' forces Chrome/Safari to skip rendering this if it's off-screen
     <div style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 30px' }}>
       {renderText(item.text)}
     </div>
   );
 }, (prevProps, nextProps) => {
-  // If loading a bulk save file, force everything to update
   const sizeDiff = Math.abs(nextProps.guessedWords.size - prevProps.guessedWords.size);
   if (sizeDiff !== 1) return false;
 
-  // The Magic Check: If the word they just typed doesn't even exist in this specific 
-  // paragraph's text, tell React to completely skip checking it.
   if (nextProps.lastGuessedWord) {
     if (!nextProps.item.text.toLowerCase().includes(nextProps.lastGuessedWord)) {
-      return true; // Return TRUE means "Props are effectively equal, SKIP RENDER"
+      return true; 
     }
   }
 
@@ -172,7 +169,6 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
     });
   };
 
-  // Dedicated lightweight renderer specifically for the Index page links
   const renderIndexLinks = (content: string) => {
     if (!isMounted) return null;
     const tokens = content.split(/([a-zA-Z]+)/);
@@ -195,25 +191,29 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-4">
-      <div className="sticky top-4 bg-white/90 backdrop-blur shadow-sm border border-slate-200 p-4 rounded-2xl mb-8 flex items-center justify-between z-10">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight hidden sm:block">
+    <div className="max-w-3xl mx-auto pt-0 pb-12 sm:py-12 px-4 sm:px-6">
+      
+      {/* Mobile: Flush top edge. Desktop: Floating rounded box */}
+      <div className="sticky top-0 sm:top-4 -mx-4 sm:mx-0 px-4 py-3 sm:p-4 bg-white/95 sm:bg-white/90 backdrop-blur shadow-sm border-b sm:border border-slate-200 sm:rounded-2xl mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between z-10 gap-3 sm:gap-4">
+        
+        {/* min-w-0 prevents flexbox from blowing past screen width on long titles */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <h1 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight truncate">
             {title}
           </h1>
           {isMounted && (
-            <div className="flex gap-2">
-              <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded-md">
+            <div className="flex gap-1.5 sm:gap-2">
+              <span className="whitespace-nowrap font-mono text-[10px] sm:text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md">
                 Page: {pagePercent}%
               </span>
-              <span className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md">
+              <span className="whitespace-nowrap font-mono text-[10px] sm:text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md">
                 Global: {globalPercent}% ({guessedWords.size} words)
               </span>
             </div>
           )}
         </div>
         
-        <div className="flex gap-2 w-full max-w-xs ml-auto">
+        <div className="w-full sm:max-w-xs sm:ml-auto shrink-0">
           {isMounted && (
             <GameInput 
               uniqueWordsInText={uniqueWordsInText}
@@ -227,7 +227,6 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
       <div className={`${isIndex ? 'text-xl leading-loose' : 'text-base leading-relaxed'} font-serif text-slate-800 break-words ${isIndex ? 'flex flex-col gap-3' : ''}`}>
         {items.map((item, i) => {
           
-          // Render Interactive Index Links
           if (item.id) {
             const unlocked = isMounted && isItemFullyGuessed(item.text);
 
@@ -238,9 +237,10 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
                   href={`/${item.id}`}
                   className="block p-4 border border-blue-300 bg-blue-50 rounded-xl hover:border-blue-400 hover:shadow-md transition-all group cursor-pointer"
                 >
-                  <div className="group-hover:scale-[1.01] transition-transform origin-left flex justify-between items-center">
-                    <div>{renderIndexLinks(item.text)}</div>
-                    <span className="ml-4 text-sm text-blue-600 font-sans font-bold whitespace-nowrap">Play →</span>
+                  <div className="group-hover:scale-[1.01] transition-transform origin-left flex justify-between items-center gap-3">
+                    <div className="min-w-0">{renderIndexLinks(item.text)}</div>
+                    {/* shrink-0 prevents the arrow text from getting squished by long titles */}
+                    <span className="shrink-0 text-sm text-blue-600 font-sans font-bold whitespace-nowrap">Play →</span>
                   </div>
                 </Link>
               );
@@ -249,19 +249,18 @@ export default function PlayableText({ title, items, isIndex = false }: { title:
             return (
               <div 
                 key={i} 
-                className="block p-4 border border-slate-200 bg-white/50 rounded-xl transition-all cursor-not-allowed opacity-80 flex justify-between items-center"
+                className="block p-4 border border-slate-200 bg-white/50 rounded-xl transition-all cursor-not-allowed opacity-80 flex justify-between items-center gap-3"
               >
-                <div>{renderIndexLinks(item.text)}</div>
-                <span className="ml-4 text-sm text-slate-400 font-sans font-bold whitespace-nowrap">Locked</span>
+                <div className="min-w-0">{renderIndexLinks(item.text)}</div>
+                <span className="shrink-0 text-sm text-slate-400 font-sans font-bold whitespace-nowrap">Locked</span>
               </div>
             );
           }
 
-          // Render Normal Play Text (Hyper-Optimized)
           return (
             <div 
               key={i} 
-              className={isIndex && !item.id ? "text-3xl font-black text-center mt-4 mb-8" : ""}
+              className={isIndex && !item.id ? "text-2xl sm:text-3xl font-black text-center mt-4 mb-8" : ""}
             >
               {isMounted && (
                 <MemoizedParagraph 
